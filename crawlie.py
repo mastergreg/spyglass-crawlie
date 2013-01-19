@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Mon 07 Jan 2013 12:36:49 AM EET
+# Last Modified : Sat 19 Jan 2013 09:19:21 PM EET
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -12,6 +12,15 @@ import serverconf
 import userconf
 
 import slumber
+import requests
+
+from urllib import quote_plus as urlquote
+from urllib2 import urlopen
+
+
+from lxml import etree
+
+import string
 
 class crawlie(object):
     def __init__(self, user=None, key=None, limit=serverconf.LIMIT):
@@ -23,33 +32,91 @@ class crawlie(object):
             self._key = key
         else:
             raise APIKeyError
+        self._params = {}
+        self._params['format'] = 'json'
+        self._params['username'] = self._user
+        self._params['api_key'] = self._key
         self._limit = limit
         self._API_URI = "{0}/api/spyglass".format(serverconf.URL)
         self.API = slumber.API(self._API_URI)
+        self._check_SSL()
+        self._get_sites()
+        self._get_siteXpaths()
+
+        
+
+    def _get_page(self, sid, params):
+        searchURL = self._gen_searchlink(sid, params)
+        return urlopen(searchURL).read()
+
+    def _get_sites(self):
+        params = dict(self._params)
+        sites = self.API.site.get(**params)['objects']
+        self._sites = {}
+        for site in sites:
+            self._sites[int(site['id'])] = site
+
+    def _get_siteXpaths(self):
+        params = dict(self._params)
+        xpaths = self.API.paths.get(**params)['objects']
+        for xpath in xpaths:
+            sid = int(xpath['site'][-2])
+            ns = self._sites[sid].get('xpaths', []) 
+            ns.append((xpath['field_name'].lower(), xpath['xpath']))
+            self._sites[sid]['xpaths'] = ns
+
+    def _check_SSL(self):
+        params=dict(self._params)
+        params['limit'] = 1
+        try:
+            self._workload = self.API.query.get(**params)['objects']
+        except requests.exceptions.SSLError:
+            if self._API_URI.startswith("https"):
+                print "security warning: https still throws SSLError, falling back to http"
+                self._API_URI = "http{0}".format(self._API_URI[5:])
+                self.API = slumber.API(self._API_URI, auth=(self._user, self._key))
+
+    def _get_settings(self):
+        pass
+
+
+    def _gen_searchlink(self, sid, params):
+        link = self._sites[sid]['url']
+        if link.startswith("http://"):
+            link = "http://{0}".format(urlquote(link[7:].format(*params.split("&")), '/'))
+        elif link.startswith("https://"):
+            link = "http://{0}".format(urlquote(link[8:].format(*params.split("&")), '/'))
+        else:
+            link = "http://{0}".format(urlquote(link.format(*params.split("&")), '/'))
+        return link
 
     def work(self, index):
-        pass
+        mywork = self._workload[index]
+        sid = int(mywork['site'][-2])
+        doc = self._get_page(sid, mywork['params'])
+        tree = etree.HTML(doc)
+        for xpath in self._sites[sid]['xpaths']:
+            r = tree.xpath(xpath[1])
+            res = mywork.get('_data', {})
+            res[xpath[0]] = r[0].text.strip()
+            mywork['_data'] = res
+        self._send_data(mywork['_data'], mywork['id'])
 
-    def get_sites(self):
-        pass
 
-    def get_siteXpaths(self):
-        pass
+    def _send_data(self, res, qid):
+        #params=dict(self._params.items() + res.items())
+        params=dict(self._params)
+        #self.API.meta.post(res, **params)
+        work = {}
+        work['completed'] = True
+        work['result'] = res
+        print res
+        self.API.meta.post(res, **params)
+        self.API.query(qid).patch(work, **params)
 
-    def check_SSL(self):
-        pass
-
-    def get_settings(self):
-        pass
-
-    def send_data(self, index):
-        pass
 
     def get_workload(self):
-        params = {}
-        params['format'] = 'json'
-        params['username'] = self._user
-        params['api_key'] = self._key
+        params=dict(self._params)
         params['limit'] = min(self._limit, serverconf.LIMIT)
         try:
             self._workload = self.API.query.get(**params)['objects']
@@ -59,10 +126,9 @@ class crawlie(object):
                 self._API_URI = "http{0}".format(self._API_URI[5:])
                 self.API = slumber.API(self._API_URI, auth=(self._user, self._key))
             self._workload = self.API.query.get(**params)['objects']
-        print self._workload
     
 
-    def shit(self):
+    def test(self):
         work = {}
         work['completed'] = True
         res = {}
@@ -72,10 +138,7 @@ class crawlie(object):
 
         work['result'] = res
 
-        params = {}
-        params['format'] = 'json'
-
-        print self.API.meta.get(**params)['objects']
+        params = dict(self._params)
         self.API.meta.post(res, **params)
         self.API.query("1").patch(work, **params)
 
@@ -83,7 +146,7 @@ class crawlie(object):
 def main():
     cr = crawlie(userconf.username, userconf.api_key)
     cr.get_workload()
-    cr.shit()
+    cr.work(0)
 
 if __name__=="__main__":
     main()
