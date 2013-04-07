@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 07 Apr 2013 03:37:29 PM EEST
+# Last Modified : Sun 07 Apr 2013 03:48:45 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -106,7 +106,7 @@ class crawlie(object):
         newhash = self._get_content_hash(mywork['_data'])
 
         if not newhash == mywork['content_hash']:
-            self._send_data(mywork['_data'], mywork['id'], mywork['persistent'], newhash)
+            self._send_data(mywork['_data'], mywork['id'], not mywork['persistent'], newhash)
         else:
             self._update_timestamp(mywork['id'])
 
