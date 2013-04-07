@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 07 Apr 2013 03:00:38 PM EEST
+# Last Modified : Sun 07 Apr 2013 03:04:24 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -110,6 +110,13 @@ class crawlie(object):
 
         if not newhash == mywork['content_hash']:
             self._send_data(mywork['_data'], mywork['id'], newhash)
+        else:
+            self._update_timestamp(mywork['id'])
+
+    def _update_timestamp(self, qid):
+        params=dict(self._params)
+        work = {}
+        self.API.query(qid).patch(work, **params)
 
 
     def _send_data(self, res, qid, newhash):
