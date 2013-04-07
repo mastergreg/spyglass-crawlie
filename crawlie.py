@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 07 Apr 2013 02:48:48 PM EEST
+# Last Modified : Sun 07 Apr 2013 03:00:38 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -109,20 +109,17 @@ class crawlie(object):
         newhash = self._get_content_hash(mywork['_data'])
 
         if not newhash == mywork['content_hash']:
-            print newhash 
-            print mywork['content_hash'] 
-            mywork['content_hash'] = newhash
-            self._send_data(mywork['_data'], mywork['id'])
+            self._send_data(mywork['_data'], mywork['id'], newhash)
 
 
-    def _send_data(self, res, qid):
+    def _send_data(self, res, qid, newhash):
         #params=dict(self._params.items() + res.items())
         params=dict(self._params)
         #self.API.meta.post(res, **params)
         work = {}
         work['completed'] = True
         work['result'] = res
-        print res
+        work['content_hash'] = newhash
         self.API.meta.post(res, **params)
         self.API.query(qid).patch(work, **params)
 
