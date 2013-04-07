@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 07 Apr 2013 03:04:24 PM EEST
+# Last Modified : Sun 07 Apr 2013 03:37:29 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -21,18 +21,16 @@ from hashlib import sha256
 
 from lxml import etree
 
-import string
-
 class crawlie(object):
     def __init__(self, user=None, key=None, limit=serverconf.LIMIT):
         if user:
             self._user = user
         else:
-            raise UserError
+            raise Exception('UserError')
         if key:
             self._key = key
         else:
-            raise APIKeyError
+            raise Exception('APIKeyError')
         self._params = {}
         self._params['format'] = 'json'
         self._params['username'] = self._user
@@ -95,7 +93,6 @@ class crawlie(object):
         hashable = ''.join(mydata.values()).encode('utf-8')
         return sha256(hashable).hexdigest()
 
-        return newhash == mywork['content_hash']
     def work(self, index):
         mywork = self._workload[index]
         sid = int(mywork['site'][-2])
@@ -109,7 +106,7 @@ class crawlie(object):
         newhash = self._get_content_hash(mywork['_data'])
 
         if not newhash == mywork['content_hash']:
-            self._send_data(mywork['_data'], mywork['id'], newhash)
+            self._send_data(mywork['_data'], mywork['id'], mywork['persistent'], newhash)
         else:
             self._update_timestamp(mywork['id'])
 
@@ -119,14 +116,15 @@ class crawlie(object):
         self.API.query(qid).patch(work, **params)
 
 
-    def _send_data(self, res, qid, newhash):
+    def _send_data(self, res, qid, completed, newhash):
         #params=dict(self._params.items() + res.items())
         params=dict(self._params)
         #self.API.meta.post(res, **params)
         work = {}
-        work['completed'] = True
+        work['completed'] = completed
         work['result'] = res
         work['content_hash'] = newhash
+        print work
         self.API.meta.post(res, **params)
         self.API.query(qid).patch(work, **params)
 
