@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sat 19 Jan 2013 09:19:21 PM EET
+# Last Modified : Sun 07 Apr 2013 02:48:48 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -17,6 +17,7 @@ import requests
 from urllib import quote_plus as urlquote
 from urllib2 import urlopen
 
+from hashlib import sha256
 
 from lxml import etree
 
@@ -89,7 +90,12 @@ class crawlie(object):
         else:
             link = "http://{0}".format(urlquote(link.format(*params.split("&")), '/'))
         return link
+    
+    def _get_content_hash(self, mydata):
+        hashable = ''.join(mydata.values()).encode('utf-8')
+        return sha256(hashable).hexdigest()
 
+        return newhash == mywork['content_hash']
     def work(self, index):
         mywork = self._workload[index]
         sid = int(mywork['site'][-2])
@@ -100,7 +106,13 @@ class crawlie(object):
             res = mywork.get('_data', {})
             res[xpath[0]] = r[0].text.strip()
             mywork['_data'] = res
-        self._send_data(mywork['_data'], mywork['id'])
+        newhash = self._get_content_hash(mywork['_data'])
+
+        if not newhash == mywork['content_hash']:
+            print newhash 
+            print mywork['content_hash'] 
+            mywork['content_hash'] = newhash
+            self._send_data(mywork['_data'], mywork['id'])
 
 
     def _send_data(self, res, qid):
