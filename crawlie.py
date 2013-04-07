@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 07 Apr 2013 03:48:45 PM EEST
+# Last Modified : Sun 07 Apr 2013 03:54:29 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -20,6 +20,8 @@ from urllib2 import urlopen
 from hashlib import sha256
 
 from lxml import etree
+
+from time import sleep
 
 class crawlie(object):
     def __init__(self, user=None, key=None, limit=serverconf.LIMIT):
@@ -93,8 +95,7 @@ class crawlie(object):
         hashable = ''.join(mydata.values()).encode('utf-8')
         return sha256(hashable).hexdigest()
 
-    def work(self, index):
-        mywork = self._workload[index]
+    def _work(self, mywork):
         sid = int(mywork['site'][-2])
         doc = self._get_page(sid, mywork['params'])
         tree = etree.HTML(doc)
@@ -128,6 +129,11 @@ class crawlie(object):
         self.API.meta.post(res, **params)
         self.API.query(qid).patch(work, **params)
 
+    def work(self):
+        for i in self._workload:
+            self._work(i)
+
+
 
     def get_workload(self):
         params=dict(self._params)
@@ -159,8 +165,10 @@ class crawlie(object):
 
 def main():
     cr = crawlie(userconf.username, userconf.api_key)
-    cr.get_workload()
-    cr.work(0)
+    while True:
+        cr.get_workload()
+        cr.work()
+        sleep(1)
 
 if __name__=="__main__":
     main()
