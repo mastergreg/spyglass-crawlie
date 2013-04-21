@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 21 Apr 2013 05:57:43 PM EEST
+# Last Modified : Sun 21 Apr 2013 06:21:28 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -16,6 +16,7 @@ import requests
 
 from urllib import quote_plus as urlquote
 from urllib2 import urlopen
+from urllib2 import URLError
 
 from hashlib import sha256
 
@@ -43,6 +44,7 @@ class Crawlie(object):
         self._limit = limit
         self._ratio = serverconf.RESULT_RATIO
         self._wait_time = serverconf.WAIT_TIME
+        self._srv_wait_time = serverconf.SRV_WAIT_TIME
         self._API_URI = "{0}/api/spyglass".format(serverconf.URL)
         self.API = slumber.API(self._API_URI)
         #self._check_SSL() get_workload checks for this too so we are ok
@@ -112,9 +114,6 @@ class Crawlie(object):
             mywork['_data'] = res
 
         newhash = self._get_content_hash(mywork['_data'])
-        print r[0]
-        print res
-        print "\t".join(r[1].values())
         if r[0] >= self._ratio and not newhash == mywork['content_hash']:
             self._send_data(mywork['_data'], mywork['id'], not mywork['persistent'], newhash)
         else:
@@ -166,8 +165,14 @@ class Crawlie(object):
 
     def work(self):
         for i in self._workload:
-            self._work(i)
-            sleep(self._wait_time)
+            try:
+                self._work(i)
+            except URLError:
+                self.net_srv_error()
+            else:
+                self.net_srv_restore()
+            finally:
+                self.net_srv_wait()
 
 
 
@@ -198,13 +203,34 @@ class Crawlie(object):
         self.API.meta.post(res, **params)
         self.API.query("1").patch(work, **params)
 
+    def net_srv_restore(self):
+        self._wait_time = serverconf.WAIT_TIME
+    def net_srv_error(self):
+        self._wait_time *= 2
+    def net_srv_wait(self):
+        sleep(self._wait_time)
+
+    def spyglass_srv_restore(self):
+        self._srv_wait_time = serverconf.SRV_WAIT_TIME
+    def spyglass_srv_error(self):
+        self._srv_wait_time *= 2
+    def spyglass_srv_wait(self):
+        sleep(self._srv_wait_time)
+
 
 def main():
     cr = Crawlie(userconf.username, userconf.api_key)
     while True:
-        cr.get_workload()
-        cr.work()
-        sleep(1)
+        try:
+            cr.get_workload()
+            cr.work()
+        except requests.exceptions.ConnectionError:
+            cr.spyglass_srv_error()
+        else:
+            cr.spyglass_srv_restore()
+        finally:
+            cr.spyglass_srv_wait()
+
 
 if __name__=="__main__":
     main()
