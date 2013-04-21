@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 07 Apr 2013 03:54:29 PM EEST
+# Last Modified : Sun 21 Apr 2013 03:08:53 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -23,7 +23,10 @@ from lxml import etree
 
 from time import sleep
 
-class crawlie(object):
+
+from fuzzywuzzy import fuzz
+
+class Crawlie(object):
     def __init__(self, user=None, key=None, limit=serverconf.LIMIT):
         if user:
             self._user = user
@@ -46,8 +49,9 @@ class crawlie(object):
 
         
 
-    def _get_page(self, sid, params):
-        searchURL = self._gen_searchlink(sid, params)
+    def _get_page(self, sid):
+        link = self._sites[sid]['url']
+        searchURL = self._gen_link(link)
         return urlopen(searchURL).read()
 
     def _get_sites(self):
@@ -81,14 +85,13 @@ class crawlie(object):
         pass
 
 
-    def _gen_searchlink(self, sid, params):
-        link = self._sites[sid]['url']
+    def _gen_link(self, link):
         if link.startswith("http://"):
-            link = "http://{0}".format(urlquote(link[7:].format(*params.split("&")), '/'))
+            link = "http://{0}".format(urlquote(link[7:]))
         elif link.startswith("https://"):
-            link = "http://{0}".format(urlquote(link[8:].format(*params.split("&")), '/'))
+            link = "http://{0}".format(urlquote(link[8:]))
         else:
-            link = "http://{0}".format(urlquote(link.format(*params.split("&")), '/'))
+            link = "http://{0}".format(urlquote(link))
         return link
     
     def _get_content_hash(self, mydata):
@@ -97,25 +100,57 @@ class crawlie(object):
 
     def _work(self, mywork):
         sid = int(mywork['site'][-2])
-        doc = self._get_page(sid, mywork['params'])
+        doc = self._get_page(sid)
         tree = etree.HTML(doc)
-        for xpath in self._sites[sid]['xpaths']:
-            r = tree.xpath(xpath[1])
-            res = mywork.get('_data', {})
-            res[xpath[0]] = r[0].text.strip()
-            mywork['_data'] = res
-        newhash = self._get_content_hash(mywork['_data'])
+        xpaths = self._sites[sid]['xpaths']
+        results = self._get_results(tree, xpaths)
+        r = max(self._score_results(results, mywork['params']))
+        
 
-        if not newhash == mywork['content_hash']:
+        for index, value in r[1].items():
+            res = mywork.get('_data', {})
+            res[index] = value
+            mywork['_data'] = res
+        print r
+
+        newhash = self._get_content_hash(mywork['_data'])
+        if r[0] >= serverconf.RESULT_RATIO and not newhash == mywork['content_hash']:
             self._send_data(mywork['_data'], mywork['id'], not mywork['persistent'], newhash)
         else:
             self._update_timestamp(mywork['id'])
+
+
+    def _get_text_from_result(self, r):
+        return r.text.strip()
+
+
+    def _get_results(self, tree, xpaths):
+        results = {}
+        final = []
+        for xpath in xpaths:
+            r = tree.xpath(xpath[1])
+            results[xpath[0]] = map(self._get_text_from_result, r)
+        keys = results.keys()
+        values = map(list, zip(*results.values()))
+        for v in values:
+            final.append(dict(zip(keys, v)))
+        return final
+
+
+    def _score_results(self, results, params):
+        tokens = "".join(params.split("&"))
+        data = map(self._get_text_from_values, results)
+        ratios = map(lambda x: fuzz.token_sort_ratio(x, tokens), data)
+        return zip(ratios, results)
+
+    def _get_text_from_values(self, dat):
+        return "".join(dat.values())
+
 
     def _update_timestamp(self, qid):
         params=dict(self._params)
         work = {}
         self.API.query(qid).patch(work, **params)
-
 
     def _send_data(self, res, qid, completed, newhash):
         #params=dict(self._params.items() + res.items())
@@ -164,7 +199,7 @@ class crawlie(object):
 
 
 def main():
-    cr = crawlie(userconf.username, userconf.api_key)
+    cr = Crawlie(userconf.username, userconf.api_key)
     while True:
         cr.get_workload()
         cr.work()
