@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 21 Apr 2013 03:08:53 PM EEST
+# Last Modified : Sun 21 Apr 2013 05:57:43 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -41,13 +41,13 @@ class Crawlie(object):
         self._params['username'] = self._user
         self._params['api_key'] = self._key
         self._limit = limit
+        self._ratio = serverconf.RESULT_RATIO
+        self._wait_time = serverconf.WAIT_TIME
         self._API_URI = "{0}/api/spyglass".format(serverconf.URL)
         self.API = slumber.API(self._API_URI)
-        self._check_SSL()
+        #self._check_SSL() get_workload checks for this too so we are ok
         self._get_sites()
         self._get_siteXpaths()
-
-        
 
     def _get_page(self, sid):
         link = self._sites[sid]['url']
@@ -106,22 +106,23 @@ class Crawlie(object):
         results = self._get_results(tree, xpaths)
         r = max(self._score_results(results, mywork['params']))
         
-
         for index, value in r[1].items():
             res = mywork.get('_data', {})
             res[index] = value
             mywork['_data'] = res
-        print r
 
         newhash = self._get_content_hash(mywork['_data'])
-        if r[0] >= serverconf.RESULT_RATIO and not newhash == mywork['content_hash']:
+        print r[0]
+        print res
+        print "\t".join(r[1].values())
+        if r[0] >= self._ratio and not newhash == mywork['content_hash']:
             self._send_data(mywork['_data'], mywork['id'], not mywork['persistent'], newhash)
         else:
             self._update_timestamp(mywork['id'])
 
 
-    def _get_text_from_result(self, r):
-        return r.text.strip()
+    def _get_text_lowercase_from_result(self, r):
+        return r.text.strip().lower()
 
 
     def _get_results(self, tree, xpaths):
@@ -129,7 +130,7 @@ class Crawlie(object):
         final = []
         for xpath in xpaths:
             r = tree.xpath(xpath[1])
-            results[xpath[0]] = map(self._get_text_from_result, r)
+            results[xpath[0]] = map(self._get_text_lowercase_from_result, r)
         keys = results.keys()
         values = map(list, zip(*results.values()))
         for v in values:
@@ -138,7 +139,7 @@ class Crawlie(object):
 
 
     def _score_results(self, results, params):
-        tokens = "".join(params.split("&"))
+        tokens = "".join(params.split("&")).lower()
         data = map(self._get_text_from_values, results)
         ratios = map(lambda x: fuzz.token_sort_ratio(x, tokens), data)
         return zip(ratios, results)
@@ -160,13 +161,13 @@ class Crawlie(object):
         work['completed'] = completed
         work['result'] = res
         work['content_hash'] = newhash
-        print work
         self.API.meta.post(res, **params)
         self.API.query(qid).patch(work, **params)
 
     def work(self):
         for i in self._workload:
             self._work(i)
+            sleep(self._wait_time)
 
 
 
