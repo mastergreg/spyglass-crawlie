@@ -4,7 +4,7 @@
 #* -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 # File Name : crawlie.py
 # Creation Date : 06-01-2013
-# Last Modified : Sun 21 Apr 2013 06:21:28 PM EEST
+# Last Modified : Tue 23 Apr 2013 06:53:42 PM EEST
 # Created By : Greg Liras <gregliras@gmail.com>
 #_._._._._._._._._._._._._._._._._._._._._.*/
 
@@ -138,13 +138,19 @@ class Crawlie(object):
 
 
     def _score_results(self, results, params):
-        tokens = "".join(params.split("&")).lower()
+        tokens = " ".join(params.split("&")).lower().encode('utf-8')
         data = map(self._get_text_from_values, results)
-        ratios = map(lambda x: fuzz.token_sort_ratio(x, tokens), data)
+        ratios = [self._scoring(d, tokens) for d in data]
         return zip(ratios, results)
 
+
+    def _scoring(self, encoded_data, encoded_tokens):
+        tokens = encoded_tokens.split()
+        ratios = map(lambda x: fuzz.partial_ratio(x , encoded_data), tokens)
+        return sum(ratios)/len(ratios)
+
     def _get_text_from_values(self, dat):
-        return "".join(dat.values())
+        return " ".join(dat.values()).encode('utf-8')
 
 
     def _update_timestamp(self, qid):
